@@ -1,5 +1,5 @@
 
-# Approach 1(topo1.js): Get topology starting from any node.
+# Approach 1(topo1.js): Get full topology starting from any node.
 
 ###COMMANDS:
 
