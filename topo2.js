@@ -45,6 +45,8 @@ var processData = function(socket, data){
 		var msg = 'GET-TOPOLOGY:' + config.name;
 		topologySignalsSentTo[socket.name] = msg;
 		socket.write(msg);
+	}else if(tokens[0] == 'OK'){
+		console.log('DO NOTHING FOR : OK');
 	}else if(tokens[0] == 'GET-TOPOLOGY') {
 		topologySignalsRcvdFrom[socket.name] = data;
 		var isForwarded = false;
@@ -52,20 +54,11 @@ var processData = function(socket, data){
 		for (key in peerSockets) {
 			var isFound = false;
 			// Do not send it to any node where this signal has passed through
-			for (index in nodesSoFar) {
-				if (nodesSoFar[index] == peerSockets[key].name) {
-					isFound = true;
-					break;
-				}
+			if(nodesSoFar.indexOf(peerSockets[key].name)>=0){
+				continue;
 			}
 			// Don't send it get topology to the ones we received from
-			for (index in topologySignalsRcvdFrom) {
-				if (topologySignalsRcvdFrom[index] == peerSockets[key].name) {
-					isFound = true;
-					break;
-				}
-			}
-			if (isFound) {
+			if (Object.keys(topologySignalsRcvdFrom).indexOf(peerSockets[key].name) >=0) {
 				continue;
 			}
 			var msg = data + ',' + config.name;
@@ -82,6 +75,8 @@ var processData = function(socket, data){
 			var msg = 'PEERS-LIST:' + tokens[1] + ',' + config.name + ':' + peersList;
 			console.log(msg);
 			socket.write(msg);
+		}else{
+			socket.write('OK:DO NOTHING');
 		}
 	}else if(tokens[0] == 'PEERS-LIST') {
 				var nodesSoFar = tokens[1].split(',');
@@ -120,6 +115,7 @@ var processData = function(socket, data){
 						}
 					}
 				}
+				socket.write('OK:DO NOTHING');
 		}else {
 		console.log('unknown command signal');
 	}
