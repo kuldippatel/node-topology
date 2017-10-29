@@ -33,7 +33,7 @@ var printTopoLogyAfterCleaning = function(adjList) {
 	console.log(result);
 }
 
-	var processData = function(socket, data){
+var processData = function(socket, data){
 	console.log('Processing data =>' + data);
 	var tokens = data.split(':');
 	if(tokens[0] == 'REGISTER-NAME'){
@@ -43,16 +43,24 @@ var printTopoLogyAfterCleaning = function(adjList) {
 		socket.write('ACK:NAME-NOTED')
 	}else if(tokens[0] == 'ACK'){
 		var msg = 'GET-TOPOLOGY:' + config.name;
-		topologySignals[socket.name] = msg;
+		topologySignalsSentTo[socket.name] = msg;
 		socket.write(msg);
 	}else if(tokens[0] == 'GET-TOPOLOGY') {
-		getTopologyReceivedFrom = socket.name;
+		topologySignalsRcvdFrom[socket.name] = data;
 		var isForwarded = false;
 		var nodesSoFar = tokens[1].split(',');
 		for (key in peerSockets) {
 			var isFound = false;
+			// Do not send it to any node where this signal has passed through
 			for (index in nodesSoFar) {
 				if (nodesSoFar[index] == peerSockets[key].name) {
+					isFound = true;
+					break;
+				}
+			}
+			// Don't send it get topology to the ones we received from
+			for (index in topologySignalsRcvdFrom) {
+				if (topologySignalsRcvdFrom[index] == peerSockets[key].name) {
 					isFound = true;
 					break;
 				}
@@ -60,38 +68,53 @@ var printTopoLogyAfterCleaning = function(adjList) {
 			if (isFound) {
 				continue;
 			}
-			var forwardMsg = data + ',' + config.name;
-			peerSockets[key].write(forwardMsg);
-			topologySignals[peerSockets[key].name] = forwardMsg;
+			var msg = data + ',' + config.name;
+			peerSockets[key].write(msg);
+			topologySignalsSentTo[peerSockets[key].name] = msg;
 			isForwarded = true;
+			console.log('FWD to ' +  peerSockets[key].name + ' => ' + msg )
 		}
 		if (isForwarded == false) {
 			var peersList = '';
 			for (key in peerSockets) {
 				peersList += config.name + '-' + peerSockets[key].name + ','
 			}
-			var msg = 'PEERS-LIST:' + nodesSoFar[0] + ':' + peersList;
+			var msg = 'PEERS-LIST:' + tokens[1] + ',' + config.name + ':' + peersList;
 			console.log(msg);
 			socket.write(msg);
 		}
 	}else if(tokens[0] == 'PEERS-LIST') {
-				peersSignals[socket.name] = tokens[2];
-				totalSent = Object.keys(topologySignals).length;
-				totalReceived = Object.keys(peersSignals).length;
+				var nodesSoFar = tokens[1].split(',');
+				peersSignalsRcvdFrom[socket.name] = tokens[2];
+				totalSent = Object.keys(topologySignalsSentTo).length;
+				totalReceived = Object.keys(peersSignalsRcvdFrom).length;
 
 				if(totalReceived == totalSent){
 					var peersList = '';
-					for(key in peersSignals){
-						peersList += peersSignals[key] + ','
+					//append peers list
+					for(key in peersSignalsRcvdFrom){
+						peersList += peersSignalsRcvdFrom[key] + ','
 					}
-					if(tokens[1]==config.name){//If it is originated by me then compile
+
+					//If it is originated by me then compile
+					if(tokens[1].split(',')[0]==config.name){
 					 	printTopoLogyAfterCleaning(peersList);
 					}else {//Else pass it back
+						var prevNode = '';
+						for(index in nodesSoFar){
+							if(nodesSoFar[index] == config.name){
+								break;//If your own node found in list, break
+							}
+							prevNode = nodesSoFar[index];
+						}
 
-						peersList += config.name + '-' + getTopologyReceivedFrom + ',';
+						peersList += config.name + '-' + prevNode + ',';
+
 						for (key in peerSockets) {
-							if (peerSockets[key].name == getTopologyReceivedFrom) {
-								peerSockets[key].write('PEERS-LIST:' + tokens[1] + ':' + peersList);
+							if (peerSockets[key].name == prevNode) {
+								var msg = 'PEERS-LIST:' + tokens[1] + ':' + peersList;
+								peerSockets[key].write(msg);
+								console.log('FWD=> ' +  peerSockets[key].name + ' ' +  msg)
 								break;//Reply to sender when all neighbors responded and break
 							}
 						}
@@ -155,9 +178,11 @@ var net = require('net');
 //var utils = require('./utils.js')
 
 var peerSockets = {};
-var topologySignals = {};
-var peersSignals = {};
-var getTopologyReceivedFrom = '';
+var topologySignalsSentTo = {};
+var topologySignalsRcvdFrom = {};
+var peersSignalsSentTo = {};
+var peersSignalsRcvdFrom = {};
+var wasPeerListPassedOn = false;
 var args = process.argv.slice(2);
 var config = loadConfig(args[0]);
 //console.log(config);
