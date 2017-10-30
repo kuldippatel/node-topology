@@ -8,6 +8,14 @@ var loadConfig = function(node){
 	return config;
 }
 
+var cleanMyLists = function(){
+	//Clean previous signals/lists
+	console.log('Cleaned\n\n\n\n');
+	topologySignalsSentTo = {};
+	topologySignalsRcvdFrom = {};
+	peersSignalsSentTo = {};
+	peersSignalsRcvdFrom = {};
+}
 
 var printTopoLogyAfterCleaning = function(adjList) {
 	var tokens = adjList.split(',');
@@ -34,18 +42,21 @@ var printTopoLogyAfterCleaning = function(adjList) {
 		}
 
 	}
-	console.log('##### TOPOLOGY SO FAR  #####');
+	console.log('##### TOPOLOGY SO FAR WITH ACTIVE NODES #####');
 	console.log(result.sort());
 }
 
 var processData = function(socket, data){
 	console.log('Processing data from: ' + socket.name + '\t' + data);
 	var tokens = data.split(':');
+
+	//After connecting to to server register your name. It doesn't know you yet.
 	if(tokens[0] == 'REGISTER-NAME'){
 		socket.name = tokens[1];
 		peerSockets[socket.id] = socket;
 		printPeers(peerSockets);
 		socket.write('ACK:NAME-NOTED' + endChar)
+	//Once name registered, Send get topology signal
 	}else if(tokens[0] == 'ACK'){
 		var msg = 'GET-TOPOLOGY:' + config.name + endChar;
 		topologySignalsSentTo[socket.name] = msg;
@@ -56,15 +67,12 @@ var processData = function(socket, data){
 		var isForwarded = false;
 		var nodesSoFar = tokens[1].split(',');
 		if(nodesSoFar[0]!=lastSignalRecvdFrom){
-				//Clean previous signals/lists
-				console.log('Cleaned\n\n\n\n');
-				topologySignalsSentTo = {};
-				topologySignalsRcvdFrom = {};
-				peersSignalsSentTo = {};
-				peersSignalsRcvdFrom = {};
+			cleanMyLists();
 		}
 		topologySignalsRcvdFrom[socket.name] = data;
 		lastSignalRecvdFrom = nodesSoFar[0];
+
+		//Forward it to peers after appending your node name.
 		for (key in peerSockets) {
 			var isFound = false;
 			// Do not send it to any node where this signal has passed through
@@ -86,6 +94,7 @@ var processData = function(socket, data){
 			isForwarded = true;
 			console.log('FWD to ' +  peerSockets[key].name + ' => ' + msg )
 		}
+		//If not forwarded further, return your peers list
 		if (isForwarded == false) {
 			var peersList = '';
 			for (key in peerSockets) {
@@ -97,6 +106,7 @@ var processData = function(socket, data){
 		}else{
 			socket.write('OK:DO NOTHING' + endChar);
 		}
+	//Process peers list you got from your peers.
 	}else if(tokens[0] == 'PEERS-LIST') {
 		var nodesSoFar = tokens[1].split(',');
 		peersSignalsRcvdFrom[socket.name] = tokens[2];
@@ -115,6 +125,7 @@ var processData = function(socket, data){
 			//If it is originated by me then compile
 			if(tokens[1].split(',')[0]==config.name){
 				printTopoLogyAfterCleaning(peersList);
+				cleanMyLists();
 			}else {//Else pass it back
 				var prevNode = '';
 				for(index in nodesSoFar){
@@ -126,6 +137,7 @@ var processData = function(socket, data){
 
 				peersList += config.name + '-' + prevNode + ',';
 
+				//Forward peers list to callers.
 				for (key in peerSockets) {
 					if (peerSockets[key].name == prevNode) {
 						var msg = 'PEERS-LIST:' + tokens[1] + ':' + peersList + endChar;
@@ -178,9 +190,7 @@ var connectToPeers = function (node) {
 	});
 
 	clientSocket.on('data', function (data) {
-		//console.log('\nReceived: ' + data);
 		var strData = String(data);
-		//console.log('\nstrData c:' + strData);
 		for(k in strData){
 			if(strData[k]!=endChar){
 				buffer += strData[k];
@@ -238,9 +248,7 @@ var server = net.createServer(function(serverSocket) {
 
 	// On data
 	serverSocket.on('data', function(data) {
-		//console.log('\nServer Socket Received: ' + data);
 		var strData = String(data);
-		//console.log('\nstrData:' + strData);
 		for(k in strData){
 			if(strData[k]!=endChar){
 				buffer += strData[k];
@@ -250,7 +258,6 @@ var server = net.createServer(function(serverSocket) {
 			}
 		}
 	})
-	//clientSocket.destroy(); // kill clientSocket after server's response}	
 });
 
 console.log('-----NODE ' + config.name + ' is UP -----');
