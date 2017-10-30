@@ -27,17 +27,19 @@ var printTopoLogyAfterCleaning = function(adjList) {
 		if(isDuplicate){
 			continue;
 		}
-		result.push(tokens[key]);
+		if(nodes[0] < nodes[1]){
+			result.push(tokens[key]);
+		}else {
+			result.push(nodes[1] + '-' + nodes[0]);
+		}
+
 	}
 	console.log('##### TOPOLOGY SO FAR  #####');
-	console.log(result);
+	console.log(result.sort());
 }
 
 var processData = function(socket, data){
-	console.log('Processing data =>' + data);
-	if(data.indexOf(endChar)>=0){
-		console.log('-------------END CHAR . IS STILL THERE --------');
-	}
+	console.log('Processing data from: ' + socket.name + '\t' + data);
 	var tokens = data.split(':');
 	if(tokens[0] == 'REGISTER-NAME'){
 		socket.name = tokens[1];
@@ -55,7 +57,7 @@ var processData = function(socket, data){
 		var nodesSoFar = tokens[1].split(',');
 		if(nodesSoFar[0]!=lastSignalRecvdFrom){
 				//Clean previous signals/lists
-				console.log('Cleaning...');
+				console.log('Cleaned\n\n\n\n');
 				topologySignalsSentTo = {};
 				topologySignalsRcvdFrom = {};
 				peersSignalsSentTo = {};
@@ -73,6 +75,11 @@ var processData = function(socket, data){
 			if (Object.keys(topologySignalsRcvdFrom).indexOf(peerSockets[key].name) >=0) {
 				continue;
 			}
+			// Don't send it get topology to the ones we already sent
+			if (Object.keys(topologySignalsSentTo).indexOf(peerSockets[key].name) >=0) {
+				continue;
+			}
+
 			var msg = data + ',' + config.name + endChar;
 			peerSockets[key].write(msg);
 			topologySignalsSentTo[peerSockets[key].name] = msg;
@@ -85,7 +92,7 @@ var processData = function(socket, data){
 				peersList += config.name + '-' + peerSockets[key].name + ','
 			}
 			var msg = 'PEERS-LIST:' + tokens[1] + ',' + config.name + ':' + peersList + endChar;
-			console.log('Replying to: ' + socket.name + ' with=> ' + msg);
+			console.log('Replying to: ' + socket.name + ' with => ' + msg);
 			socket.write(msg);
 		}else{
 			socket.write('OK:DO NOTHING' + endChar);
@@ -96,6 +103,8 @@ var processData = function(socket, data){
 		totalSent = Object.keys(topologySignalsSentTo).length;
 		totalReceived = Object.keys(peersSignalsRcvdFrom).length;
 
+		console.log('TOTAL SENT: ' + totalSent);
+		console.log('TOTAL RECVD: ' + totalReceived);
 		if(totalReceived == totalSent){
 			var peersList = '';
 			//append peers list
@@ -121,7 +130,7 @@ var processData = function(socket, data){
 					if (peerSockets[key].name == prevNode) {
 						var msg = 'PEERS-LIST:' + tokens[1] + ':' + peersList + endChar;
 						peerSockets[key].write(msg);
-						console.log('FWD=> ' +  peerSockets[key].name + ' ' +  msg)
+						console.log('FWD => ' +  peerSockets[key].name + ' ' +  msg)
 						break;//Reply to sender when all neighbors responded and break
 					}
 				}
@@ -171,7 +180,7 @@ var connectToPeers = function (node) {
 	clientSocket.on('data', function (data) {
 		//console.log('\nReceived: ' + data);
 		var strData = String(data);
-		console.log('strData c:' + strData);
+		//console.log('\nstrData c:' + strData);
 		for(k in strData){
 			if(strData[k]!=endChar){
 				buffer += strData[k];
@@ -231,7 +240,7 @@ var server = net.createServer(function(serverSocket) {
 	serverSocket.on('data', function(data) {
 		//console.log('\nServer Socket Received: ' + data);
 		var strData = String(data);
-		console.log('\n\nstrData:' + strData);
+		//console.log('\nstrData:' + strData);
 		for(k in strData){
 			if(strData[k]!=endChar){
 				buffer += strData[k];
